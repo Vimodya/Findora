@@ -7,8 +7,9 @@ namespace Findora.API.Data;
 /// EF Core database context for Findora. Module 1 established the
 /// PostgreSQL connection and the shared auditable-entity convention. Module
 /// 2 adds the authentication schema (users, roles, refresh/verification/
-/// reset tokens). Later feature modules (lost/found reports, matches,
-/// claims, etc.) will add their own <c>DbSet</c> properties and entity
+/// reset tokens). Module 4 adds lost-item reporting (item categories,
+/// lost reports). Later feature modules (found reports, matches, claims,
+/// etc.) will add their own <c>DbSet</c> properties and entity
 /// configurations here.
 /// </summary>
 public class FindoraDbContext : DbContext
@@ -24,12 +25,29 @@ public class FindoraDbContext : DbContext
     {
     }
 
+    // Fixed seed IDs for the initial item categories (Module 4), for the
+    // same idempotent-reseeding reason as the role IDs above.
+    private static readonly Guid ElectronicsCategoryId = Guid.Parse("d1a1c2b0-0001-4a10-9c10-000000000001");
+    private static readonly Guid DocumentsCategoryId = Guid.Parse("d1a1c2b0-0001-4a10-9c10-000000000002");
+    private static readonly Guid ClothingCategoryId = Guid.Parse("d1a1c2b0-0001-4a10-9c10-000000000003");
+    private static readonly Guid BagsCategoryId = Guid.Parse("d1a1c2b0-0001-4a10-9c10-000000000004");
+    private static readonly Guid KeysCategoryId = Guid.Parse("d1a1c2b0-0001-4a10-9c10-000000000005");
+    private static readonly Guid JewelryCategoryId = Guid.Parse("d1a1c2b0-0001-4a10-9c10-000000000006");
+    private static readonly Guid BooksCategoryId = Guid.Parse("d1a1c2b0-0001-4a10-9c10-000000000007");
+    private static readonly Guid PetsCategoryId = Guid.Parse("d1a1c2b0-0001-4a10-9c10-000000000008");
+    private static readonly Guid VehiclesCategoryId = Guid.Parse("d1a1c2b0-0001-4a10-9c10-000000000009");
+    private static readonly Guid OtherCategoryId = Guid.Parse("d1a1c2b0-0001-4a10-9c10-000000000010");
+
     public DbSet<User> Users => Set<User>();
     public DbSet<Role> Roles => Set<Role>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<EmailVerificationToken> EmailVerificationTokens => Set<EmailVerificationToken>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+
+    // Module 4 — Lost Item Reporting.
+    public DbSet<ItemCategory> ItemCategories => Set<ItemCategory>();
+    public DbSet<LostItemReport> LostItemReports => Set<LostItemReport>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -120,9 +138,75 @@ public class FindoraDbContext : DbContext
                   .OnDelete(DeleteBehavior.Cascade);
         });
 
-        // Domain entity configurations (IEntityTypeConfiguration<T>) will be
-        // applied here via modelBuilder.ApplyConfigurationsFromAssembly(...)
-        // once Module 4+ introduces concrete entities.
+        modelBuilder.Entity<ItemCategory>(entity =>
+        {
+            entity.HasIndex(c => c.Name).IsUnique();
+            entity.Property(c => c.Name).HasMaxLength(100).IsRequired();
+            entity.Property(c => c.Description).HasMaxLength(500);
+            entity.Property(c => c.IsActive).HasDefaultValue(true).IsRequired();
+
+            // Seed the initial category set shared by Lost (Module 4) and
+            // Found (Module 5) reporting. Fixed IDs (above) keep this
+            // idempotent across environments/migrations, same convention
+            // as the role seeding above.
+            var seededAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            entity.HasData(
+                new ItemCategory { Id = ElectronicsCategoryId, Name = "Electronics", CreatedAt = seededAt },
+                new ItemCategory { Id = DocumentsCategoryId, Name = "Documents", CreatedAt = seededAt },
+                new ItemCategory { Id = ClothingCategoryId, Name = "Clothing", CreatedAt = seededAt },
+                new ItemCategory { Id = BagsCategoryId, Name = "Bags", CreatedAt = seededAt },
+                new ItemCategory { Id = KeysCategoryId, Name = "Keys", CreatedAt = seededAt },
+                new ItemCategory { Id = JewelryCategoryId, Name = "Jewelry", CreatedAt = seededAt },
+                new ItemCategory { Id = BooksCategoryId, Name = "Books", CreatedAt = seededAt },
+                new ItemCategory { Id = PetsCategoryId, Name = "Pets", CreatedAt = seededAt },
+                new ItemCategory { Id = VehiclesCategoryId, Name = "Vehicles", CreatedAt = seededAt },
+                new ItemCategory { Id = OtherCategoryId, Name = "Other", CreatedAt = seededAt });
+        });
+
+        modelBuilder.Entity<LostItemReport>(entity =>
+        {
+            entity.Property(r => r.Title).HasMaxLength(150).IsRequired();
+            entity.Property(r => r.Description).HasMaxLength(2000).IsRequired();
+            entity.Property(r => r.LocationDescription).HasMaxLength(500);
+            entity.Property(r => r.Brand).HasMaxLength(100);
+            entity.Property(r => r.Color).HasMaxLength(50);
+            entity.Property(r => r.IdentifyingCharacteristics).HasMaxLength(2000);
+            entity.Property(r => r.SerialNumber).HasMaxLength(100);
+
+            entity.Property(r => r.Status)
+                  .HasConversion<string>()
+                  .HasMaxLength(20)
+                  .HasDefaultValue(LostItemStatus.Active)
+                  .IsRequired();
+
+            entity.Property(r => r.ContactPreference)
+                  .HasConversion<string>()
+                  .HasMaxLength(20)
+                  .HasDefaultValue(ContactPreference.Platform)
+                  .IsRequired();
+
+            // Likely future query patterns: a user's own reports, filtering
+            // by category/status (search/matching, Modules 7/8), and
+            // sorting/filtering by when the item was lost.
+            entity.HasIndex(r => r.UserId);
+            entity.HasIndex(r => r.CategoryId);
+            entity.HasIndex(r => r.Status);
+            entity.HasIndex(r => r.DateLost);
+
+            // Restrict (not Cascade) on both FKs: a report is soft-deleted
+            // (see LostItemService.CancelAsync), never hard-deleted, so it
+            // should never be silently wiped out by a user or category
+            // deletion happening elsewhere.
+            entity.HasOne(r => r.User)
+                  .WithMany()
+                  .HasForeignKey(r => r.UserId)
+                  .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(r => r.Category)
+                  .WithMany()
+                  .HasForeignKey(r => r.CategoryId)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
     }
 
     public override int SaveChanges()

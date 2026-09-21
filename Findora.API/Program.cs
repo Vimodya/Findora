@@ -155,6 +155,14 @@ builder.Services.AddScoped<IEmailSender, LoggingEmailSender>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IUserProfileService, UserProfileService>();
 
+// ---------------------------------------------------------------------
+// Lost Item Reporting (Module 4)
+// ---------------------------------------------------------------------
+builder.Services.AddScoped<IItemCategoryRepository, ItemCategoryRepository>();
+builder.Services.AddScoped<IItemCategoryService, ItemCategoryService>();
+builder.Services.AddScoped<ILostItemRepository, LostItemRepository>();
+builder.Services.AddScoped<ILostItemService, LostItemService>();
+
 // Rate limiting (Module 2) — a modest fixed-window limiter per client IP,
 // applied to the auth controller via [EnableRateLimiting("auth")]. Values
 // are configurable per environment via "RateLimiting:Auth" and are not

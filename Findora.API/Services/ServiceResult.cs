@@ -9,7 +9,13 @@ namespace Findora.API.Services;
 public enum ServiceErrorCode
 {
     None,
-    NotFound
+    NotFound,
+
+    /// <summary>The resource exists but the caller doesn't own/control it (maps to 403, not 404 — see e.g. Module 4's lost-item ownership checks).</summary>
+    Forbidden,
+
+    /// <summary>A business-rule validation failure beyond data-annotation binding (e.g. a referenced category that doesn't exist) — maps to 400.</summary>
+    Validation
 }
 
 /// <summary>Outcome of a non-auth service operation (e.g. <see cref="IUserProfileService"/>).</summary>
