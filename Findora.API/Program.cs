@@ -163,6 +163,12 @@ builder.Services.AddScoped<IItemCategoryService, ItemCategoryService>();
 builder.Services.AddScoped<ILostItemRepository, LostItemRepository>();
 builder.Services.AddScoped<ILostItemService, LostItemService>();
 
+// ---------------------------------------------------------------------
+// Found Item Reporting (Module 5)
+// ---------------------------------------------------------------------
+builder.Services.AddScoped<IFoundItemRepository, FoundItemRepository>();
+builder.Services.AddScoped<IFoundItemService, FoundItemService>();
+
 // Rate limiting (Module 2) — a modest fixed-window limiter per client IP,
 // applied to the auth controller via [EnableRateLimiting("auth")]. Values
 // are configurable per environment via "RateLimiting:Auth" and are not

@@ -443,19 +443,56 @@ Plain `latitude`/`longitude` columns plus a free-text
 search and distance calculation are Module 7's responsibility; this module
 only stores the coordinates.
 
+## Found Item Reporting (Module 5)
+
+Mirrors Module 4's implementation field-for-field — same architecture,
+same DTO shape, same ownership/visibility rules, same validation approach
+— with `DateFound`/`ApproximateTimeFound` in place of `DateLost`/
+`ApproximateTimeLost` and `FoundItemStatus` (`Active`/`Returned`/
+`Cancelled`) in place of `LostItemStatus`. See Module 4's section above for
+the shared rationale (owner-only visibility, minimal status enum, MVP
+lat/lng location, why the route is `/api/v1/found-items` rather than the
+`/api/v1/found-reports` originally drafted in `TODO.md`); it isn't
+repeated here.
+
+### Endpoints
+
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `POST /api/v1/found-items` | Required | Create a found report. The finder is always the authenticated caller — there is no client-settable `userId`. |
+| `GET /api/v1/found-items/my` | Required | The caller's own reports, paginated (`page`, `pageSize`, max page size 50). |
+| `GET /api/v1/found-items/{id}` | Required | A single report — owner-only, same as Module 4. |
+| `PUT /api/v1/found-items/{id}` | Required | Update a report's editable fields. Owner-only. |
+| `DELETE /api/v1/found-items/{id}` | Required | Cancel a report: sets `status` to `Cancelled` **and** soft-deletes the row. Owner-only. |
+| `GET /api/v1/item-categories` | None | **Reused as-is from Module 4** — no separate `found-item-categories` endpoint or second category table. |
+
+### What's deliberately not here
+
+Per this pass's explicit scope, Found Item Reporting does **not** include:
+image/file attachments (Module 6), the "current holding location" /
+organization hand-off concept, or the `WithFinder`/`HandedToOrganization`/
+`PendingPickup` handover status sketched in `TODO.md`'s original Module 5
+draft — those depend on organizations existing at all (Module 13/14),
+which this pass explicitly excluded. `FoundItemReport` has no
+`OrganizationId` column (nullable or otherwise) — adding one ahead of
+Module 13 would be exactly the kind of unused placeholder the project's
+conventions avoid; Module 14 can add it via its own migration when
+organizations exist.
+
 ## Testing
 
 `Findora.API.Tests` (xUnit) covers Module 2's authentication logic,
-Module 3's profile/status logic, and Module 4's lost-item reporting — the
-minimum test project called for by Module 21's incremental testing
-requirement, started here rather than deferred.
+Module 3's profile/status logic, Module 4's lost-item reporting, and
+Module 5's found-item reporting — the minimum test project called for by
+Module 21's incremental testing requirement, started here rather than
+deferred.
 
 ```bash
 dotnet test
 ```
 
 - **Integration tests** (`AuthEndpointsTests`, `UsersEndpointsTests`,
-  `LostItemsEndpointsTests`, `RateLimitingTests`) boot the real `Program` end-to-end (real middleware
+  `LostItemsEndpointsTests`, `FoundItemsEndpointsTests`, `RateLimitingTests`) boot the real `Program` end-to-end (real middleware
   pipeline, real JWT validation, real rate limiter, real
   `ActiveAccountRequirement`) via `WebApplicationFactory<Program>`, against
   an isolated **EF Core InMemory** database per test class instead of the
@@ -495,6 +532,19 @@ fields — id/userId/status — never changing, `403` for another user's
 report), cancellation (soft-delete + status transition, `403` for another
 user's report), a suspended account losing access immediately, and the
 category endpoint returning the seeded list without authentication.
+
+Covered (Module 5): the same coverage as Module 4, mirrored for found
+reports — creation (authenticated/unauthenticated, invalid category,
+missing required fields, future date found, out-of-range/partial
+coordinates, server-assigned finder id), retrieval (owner success, `404`,
+`403` for another user's report), paginated own-report listing, update
+(allowed fields persisting, protected fields never changing, `403` for
+another user's report), cancellation (soft-delete + status transition,
+`403` for another user's report), a suspended account losing access
+immediately, and — specific to Module 5 — that the same seeded category id
+is accepted by both the found-item and lost-item endpoints, proving the
+two modules share one `ItemCategories` table rather than each having their
+own.
 
 Note: these tests intentionally don't exercise real PostgreSQL-specific
 behavior (that's implicitly covered by the manual verification against the
@@ -620,10 +670,19 @@ the real Docker PostgreSQL database: create/retrieve/update/cancel for a
 user's own lost reports, server-assigned ownership and status, the shared
 `ItemCategory` lookup table (seeded with 10 categories, reusable by
 Module 5), and owner-only authorization are all in place, with tests added
-to `Findora.API.Tests`. Found item reporting (Module 5), image/file
+to `Findora.API.Tests`.
+
+Module 5 (Found Item Reporting) backend is implemented and verified
+against the real Docker PostgreSQL database: create/retrieve/update/cancel
+for a user's own found reports, server-assigned ownership and status, and
+owner-only authorization are all in place, reusing Module 4's `ItemCategory`
+table as-is (no second category table or endpoint) and mirroring its DTO
+shapes/conventions, with tests added to `Findora.API.Tests`. Image/file
 attachments (Module 6), search/radius filtering (Module 7), matching
-(Modules 8/9), and the formal lifecycle state machine (Module 15) are
-deliberately not implemented yet — see `TODO.md`'s Module 4 section for
-what's explicitly deferred to each. Frontend for Modules 2-4, the
-reputation *algorithm* (Module 17), AI matching, and AWS integration have
-not been implemented yet.
+(Modules 8/9), match records (Module 10), ownership claims (Module 11),
+the formal lifecycle state machine (Module 15), and all organization
+features (Modules 13/14 — including the found-item organization hand-off
+concept) are deliberately not implemented yet — see `TODO.md`'s Module 4/5
+sections for what's explicitly deferred to each. Frontend for Modules 2-5,
+the reputation *algorithm* (Module 17), AI matching, and AWS integration
+have not been implemented yet.

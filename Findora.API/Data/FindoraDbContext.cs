@@ -8,9 +8,9 @@ namespace Findora.API.Data;
 /// PostgreSQL connection and the shared auditable-entity convention. Module
 /// 2 adds the authentication schema (users, roles, refresh/verification/
 /// reset tokens). Module 4 adds lost-item reporting (item categories,
-/// lost reports). Later feature modules (found reports, matches, claims,
-/// etc.) will add their own <c>DbSet</c> properties and entity
-/// configurations here.
+/// lost reports). Module 5 adds found-item reporting (reusing Module 4's
+/// item categories). Later feature modules (matches, claims, etc.) will
+/// add their own <c>DbSet</c> properties and entity configurations here.
 /// </summary>
 public class FindoraDbContext : DbContext
 {
@@ -48,6 +48,9 @@ public class FindoraDbContext : DbContext
     // Module 4 — Lost Item Reporting.
     public DbSet<ItemCategory> ItemCategories => Set<ItemCategory>();
     public DbSet<LostItemReport> LostItemReports => Set<LostItemReport>();
+
+    // Module 5 — Found Item Reporting.
+    public DbSet<FoundItemReport> FoundItemReports => Set<FoundItemReport>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -197,6 +200,49 @@ public class FindoraDbContext : DbContext
             // (see LostItemService.CancelAsync), never hard-deleted, so it
             // should never be silently wiped out by a user or category
             // deletion happening elsewhere.
+            entity.HasOne(r => r.User)
+                  .WithMany()
+                  .HasForeignKey(r => r.UserId)
+                  .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(r => r.Category)
+                  .WithMany()
+                  .HasForeignKey(r => r.CategoryId)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<FoundItemReport>(entity =>
+        {
+            entity.Property(r => r.Title).HasMaxLength(150).IsRequired();
+            entity.Property(r => r.Description).HasMaxLength(2000).IsRequired();
+            entity.Property(r => r.LocationDescription).HasMaxLength(500);
+            entity.Property(r => r.Brand).HasMaxLength(100);
+            entity.Property(r => r.Color).HasMaxLength(50);
+            entity.Property(r => r.IdentifyingCharacteristics).HasMaxLength(2000);
+            entity.Property(r => r.SerialNumber).HasMaxLength(100);
+
+            entity.Property(r => r.Status)
+                  .HasConversion<string>()
+                  .HasMaxLength(20)
+                  .HasDefaultValue(FoundItemStatus.Active)
+                  .IsRequired();
+
+            entity.Property(r => r.ContactPreference)
+                  .HasConversion<string>()
+                  .HasMaxLength(20)
+                  .HasDefaultValue(ContactPreference.Platform)
+                  .IsRequired();
+
+            // Same future query patterns as LostItemReport: a user's own
+            // reports, filtering by category/status (search/matching,
+            // Modules 7/8), and sorting/filtering by when the item was found.
+            entity.HasIndex(r => r.UserId);
+            entity.HasIndex(r => r.CategoryId);
+            entity.HasIndex(r => r.Status);
+            entity.HasIndex(r => r.DateFound);
+
+            // Restrict (not Cascade) on both FKs — same rationale as
+            // LostItemReport: a report is soft-deleted, never hard-deleted.
             entity.HasOne(r => r.User)
                   .WithMany()
                   .HasForeignKey(r => r.UserId)

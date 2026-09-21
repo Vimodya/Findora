@@ -329,23 +329,23 @@ attributes later used for search and matching.
 hand-off concept that Modules 13/14 build on.
 
 **Features/tasks**
-- [ ] Create found report
-- [ ] Found location (text + coordinates)
-- [ ] Found date/time
-- [ ] Images (attachment references — actual upload/storage lives in Module 6)
-- [ ] Description, category, brand, color (reuses `ItemCategories` from Module 4)
-- [ ] Current holding location (with the finder / handed to an organization)
-- [ ] Organization handover status (`WithFinder`, `HandedToOrganization`, `PendingPickup`) — full org workflow in Module 14
+- [x] Create found report — *`POST /api/v1/found-items`; verified against the real Docker PostgreSQL database.*
+- [x] Found location (text + coordinates) — *`LocationDescription` + `Latitude`/`Longitude`, same MVP approach as Module 4 (no PostGIS).*
+- [x] Found date/time — *`DateFound` (date) + optional `ApproximateTimeFound` (time-of-day).*
+- [ ] Images (attachment references) — **deferred to Module 6**, as instructed; no `ReportImage`/attachment field was added.
+- [x] Description, category, brand, color (reuses `ItemCategories` from Module 4) — *same `ItemCategory` table/seed data, no second category table.*
+- [ ] Current holding location (with the finder / handed to an organization) — **deferred**; this is an organization-hand-off concept (Module 13/14), out of scope for this pass, which explicitly excluded organization features.
+- [ ] Organization handover status (`WithFinder`, `HandedToOrganization`, `PendingPickup`) — **deferred to Module 14**, per this pass's explicit instruction not to implement organization features; `FoundItemStatus` (below) covers only the individual-finder lifecycle for now.
 
 **Backend tasks**
-- [ ] `FoundReport` entity in `Models/`
-- [ ] `FoundReportDto` variants in `DTOs/`
-- [ ] `FoundReportService` + `FoundReportRepository`
-- [ ] Ownership/authorization rules (reporter, or organization staff on behalf of the org)
+- [x] `FoundItemReport` entity in `Models/` (named to match the implemented `/api/v1/found-items` route, mirroring `LostItemReport`)
+- [x] `CreateFoundItemRequest`/`UpdateFoundItemRequest`/`FoundItemResponse`/`FoundItemSummaryResponse`/`PaginatedFoundItemsResponse` in `DTOs/FoundItems/`
+- [x] `FoundItemService`/`IFoundItemService` + `FoundItemRepository`/`IFoundItemRepository`
+- [x] Ownership/authorization rules — *finder-only (owner-only); no organization-staff variant, since Module 13 (organizations) doesn't exist yet.*
 
 **Database tasks**
-- [ ] `FoundReports` table (FK to `Users`, nullable FK to `Organizations` for later)
-- [ ] Migration + indexes on `CategoryId`, `Status`, `FoundAt`, and location columns
+- [x] `FoundItemReports` table (FK to `Users`, `OnDelete: Restrict`) — *no nullable `Organizations` FK added yet; Module 13 introduces that entity, and adding a dangling FK ahead of it would be a placeholder the instructions said to avoid.*
+- [x] Migration (`AddFoundItemReporting`) + indexes on `CategoryId`, `Status`, `DateFound`, and `UserId` — *applied to the real Docker PostgreSQL database; schema confirmed via `psql \d`. The Module 4 migration was not modified or recreated.*
 
 **Frontend tasks**
 - [ ] "Report Found Item" form
@@ -353,20 +353,29 @@ hand-off concept that Modules 13/14 build on.
 - [ ] Handover status indicator
 
 **API endpoints**
-- `POST /api/v1/found-reports`
-- `GET /api/v1/found-reports`
-- `GET /api/v1/found-reports/{id}`
-- `PUT /api/v1/found-reports/{id}`
-- `PATCH /api/v1/found-reports/{id}/status`
+- [x] `POST /api/v1/found-items`
+- [x] `GET /api/v1/found-items/my` (own reports, paginated)
+- [x] `GET /api/v1/found-items/{id}` (owner-only, same visibility approach as Module 4)
+- [x] `PUT /api/v1/found-items/{id}`
+- [x] `DELETE /api/v1/found-items/{id}` (soft-cancel: `Status → Cancelled`, `IsDeleted → true`)
+- [x] `GET /api/v1/item-categories` reused as-is (no separate `found-item-categories` endpoint)
+
+  **Note:** as with Module 4, this pass's explicit instructions specified
+  the `/api/v1/found-items` route (not `/api/v1/found-reports` as
+  originally drafted above) and no separate `PATCH .../status` endpoint —
+  status only moves via the create-time default and the cancel action.
 
 **Dependencies**
 - Module 3
-- (Can be developed **in parallel** with Module 4 by the other developer — shares the `ItemCategories` lookup table introduced in Module 4, so agree on that schema first.)
+- Module 4 (shares its `ItemCategory` table — built after Module 4 rather than in parallel, since it reuses Module 4's lookup table directly)
 
 **Definition of Done**
-- Authenticated user can create, view, and update a found report
-- Image field accepts a placeholder/reference (real upload wired in Module 6)
-- Found reports are queryable in the same shape as lost reports (consistent DTO conventions) to simplify Module 7/8
+- [x] Authenticated user can create, view, and update a found report — *verified via `Findora.API.Tests` (20 new tests) and manually against the real Docker PostgreSQL database.*
+- [ ] Image field accepts a placeholder/reference — **not implemented**; deferred to Module 6 as instructed (no image/attachment field of any kind was added).
+- [x] Found reports are queryable in the same shape as lost reports (consistent DTO conventions) — *`FoundItemResponse`/`FoundItemSummaryResponse`/`PaginatedFoundItemsResponse` mirror the Module 4 Lost DTOs field-for-field (aside from `DateFound`/`ApproximateTimeFound` naming), simplifying Module 7/8.*
+
+**Deferred to later modules (intentionally not implemented here):**
+- Image/file attachments (Module 6), search/radius filtering (Module 7), matching (Module 8/9), match records (Module 10), ownership claims (Module 11), the full report lifecycle/state machine (Module 15), and all organization features (Modules 13/14) — including the "handed to an organization" holding-location concept and handover status, per this pass's explicit scope exclusion.
 
 **Suggested Git branch name**
 `feature/found-item-reporting`
