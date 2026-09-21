@@ -258,28 +258,29 @@ matching, claims, and fraud prevention.
 attributes later used for search and matching.
 
 **Features/tasks**
-- [ ] Create lost report
-- [ ] Update lost report (owner only, before it's matched/closed)
-- [ ] Delete/archive lost report (soft delete)
-- [ ] Item category (enum or lookup table: Electronics, Documents, Bags, Jewelry, Pets, Keys, Other, ...)
-- [ ] Item name, description, brand, color
-- [ ] Location lost (text + coordinates)
-- [ ] Date/time lost
-- [ ] Identifying characteristics (free text, used later for hidden-characteristic claim verification)
-- [ ] Optional serial number field
-- [ ] Report status (`Active`, `UnderReview`, `Matched`, `Recovered`, `Expired`, `Archived` — full lifecycle finalized in Module 15)
+- [x] Create lost report — *`POST /api/v1/lost-items`; verified against the real Docker PostgreSQL database.*
+- [x] Update lost report (owner only) — *`PUT /api/v1/lost-items/{id}`; "before it's matched/closed" isn't enforceable yet since Module 8/10/15 (matching/lifecycle) don't exist — deferred to those modules.*
+- [x] Delete/archive lost report (soft delete) — *`DELETE /api/v1/lost-items/{id}`: sets `Status = Cancelled` **and** `IsDeleted = true`; the row is never physically removed.*
+- [x] Item category (lookup table: Electronics, Documents, Clothing, Bags, Keys, Jewelry, Books, Pets, Vehicles, Other) — *`ItemCategory` entity + `ItemCategories` table, seeded via `HasData`, shared by Module 5.*
+- [x] Item name (`Title`), description, brand, color
+- [x] Location lost (text `LocationDescription` + `Latitude`/`Longitude`) — *plain columns, app-level distance calc deferred to Module 7; no PostGIS.*
+- [x] Date/time lost — *`DateLost` (date) + optional `ApproximateTimeLost` (time-of-day).*
+- [x] Identifying characteristics (free text) — *`IdentifyingCharacteristics`, intended for Module 11's hidden-characteristic claim verification later.*
+- [x] Optional serial number field — *`SerialNumber`.*
+- [x] Report status — *deliberately minimal `LostItemStatus` enum (`Active`, `Resolved`, `Cancelled`) rather than the full `UnderReview`/`Matched`/`Recovered`/`Expired`/`Archived` list, per this pass's explicit instruction not to implement the full lifecycle yet; values map cleanly onto Module 15's future state machine (see doc comment on `LostItemStatus`).*
 
 **Backend tasks**
-- [ ] `LostReport` entity in `Models/`
-- [ ] `LostReportDto` (create/update/read variants) in `DTOs/`
-- [ ] `LostReportService` + `LostReportRepository`
-- [ ] Ownership authorization (only the reporting user, or Admin, can edit/delete)
-- [ ] Basic input validation (required fields, date not in the future, etc.)
+- [x] `LostItemReport` entity in `Models/` (named to match the implemented `/api/v1/lost-items` route — see API endpoints note below)
+- [x] `CreateLostItemRequest`/`UpdateLostItemRequest`/`LostItemResponse`/`LostItemSummaryResponse`/`PaginatedLostItemsResponse` in `DTOs/LostItems/`
+- [x] `LostItemService`/`ILostItemService` + `LostItemRepository`/`ILostItemRepository`
+- [x] Ownership authorization (only the reporting user can view/edit/cancel; no Admin override endpoint was in scope for this pass — deferred, likely Module 18)
+- [x] Basic input validation (required fields, max lengths, category must exist, date not in the future, coordinate range/pairing) — *`CreateLostItemRequest`/`UpdateLostItemRequest` (`[Required]`/`[MaxLength]`/`[Range]`/`IValidatableObject`) + `LostItemService` (category existence).*
+- [x] `ItemCategory` lookup + `ItemCategoryRepository`/`ItemCategoryService` (shared by Module 5)
 
 **Database tasks**
-- [ ] `LostReports` table with FK to `Users`
-- [ ] `ItemCategories` lookup table (shared with Module 5)
-- [ ] Migration + indexes on `CategoryId`, `Status`, `LostAt`, and location columns
+- [x] `LostItemReports` table with FK to `Users` (`OnDelete: Restrict`, never cascades — consistent with soft delete)
+- [x] `ItemCategories` lookup table (shared with Module 5), FK from `LostItemReports` (`OnDelete: Restrict`)
+- [x] Migration (`AddLostItemReporting`) + indexes on `UserId`, `CategoryId`, `Status`, `DateLost` — *applied to the real Docker PostgreSQL database; schema and 10 seeded categories confirmed via `psql \d`.*
 
 **Frontend tasks**
 - [ ] "Report Lost Item" form
@@ -287,21 +288,33 @@ attributes later used for search and matching.
 - [ ] Edit/archive lost report UI
 
 **API endpoints**
-- `POST /api/v1/lost-reports`
-- `GET /api/v1/lost-reports` (own reports, paginated)
-- `GET /api/v1/lost-reports/{id}`
-- `PUT /api/v1/lost-reports/{id}`
-- `DELETE /api/v1/lost-reports/{id}` (archive)
-- `PATCH /api/v1/lost-reports/{id}/status`
+- [x] `POST /api/v1/lost-items`
+- [x] `GET /api/v1/lost-items/my` (own reports, paginated)
+- [x] `GET /api/v1/lost-items/{id}` (owner-only for this MVP pass — see doc comment on `LostItemsController`)
+- [x] `PUT /api/v1/lost-items/{id}`
+- [x] `DELETE /api/v1/lost-items/{id}` (soft-cancel: `Status → Cancelled`, `IsDeleted → true`)
+- [x] `GET /api/v1/item-categories` (anonymous; shared by Module 5)
+
+  **Note:** this task's kickoff instructions explicitly specified the
+  `/api/v1/lost-items` route (not the `/api/v1/lost-reports` drafted
+  above when this roadmap was first written, and no separate
+  `PATCH .../status` endpoint — status changes for this pass are only
+  the create-time default and the cancel action). Implemented per the
+  explicit instructions given for this pass; entity/service/repository
+  names (`LostItemReport`, `LostItemService`, …) were chosen to match.
 
 **Dependencies**
 - Module 3
 
 **Definition of Done**
-- Authenticated user can create, view, update, and archive a lost report
-- Validation rejects incomplete/invalid submissions with clear error messages
-- Only the owner (or Admin) can modify a report
-- Frontend form covers all required attributes and displays validation errors
+- [x] Authenticated user can create, view, update, and cancel a lost report — *verified via `Findora.API.Tests` (18 new tests) and manually against the real Docker PostgreSQL database.*
+- [x] Validation rejects incomplete/invalid submissions with clear error messages (400, with a `MessageResponse`/`ProblemDetails` body)
+- [x] Only the owner can modify a report — *403 for another user's report, verified by test; no Admin override exists yet (not requested for this pass).*
+- [ ] Frontend form covers all required attributes and displays validation errors — **not done; frontend is out of scope for this pass (implemented separately by the other developer).**
+
+**Deferred to later modules (intentionally not implemented here):**
+- Found Item Reporting (Module 5), image/file attachments (Module 6, no `ReportImage` entity or upload endpoint added), search/radius filtering (Module 7), matching (Module 8/9), the full report lifecycle/state machine and `ReportStatusHistory` audit trail (Module 15), and any claims/messaging/notification hooks (Modules 11/12/16).
+- An Admin-override path for viewing/editing another user's report (mirrors Module 3's admin-only status endpoint) was not built — only add it alongside whatever module actually needs Admin moderation of reports (Module 18).
 
 **Suggested Git branch name**
 `feature/lost-item-reporting`

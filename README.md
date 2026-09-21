@@ -389,19 +389,73 @@ Modules 4/5 introduce `LostReport`/`FoundReport` entities, a query surface
 (e.g. `GET /api/v1/users/me/reports`) belongs in `UsersController`; see the
 doc comment there.
 
+## Lost Item Reporting (Module 4)
+
+### Endpoints
+
+| Endpoint | Auth | Purpose |
+|---|---|---|
+| `POST /api/v1/lost-items` | Required | Create a lost report. The reporter is always the authenticated caller — there is no client-settable `userId`. |
+| `GET /api/v1/lost-items/my` | Required | The caller's own reports, paginated (`page`, `pageSize`, max page size 50). |
+| `GET /api/v1/lost-items/{id}` | Required | A single report — **owner-only** for this MVP pass (see below). |
+| `PUT /api/v1/lost-items/{id}` | Required | Update a report's editable fields. Owner-only. |
+| `DELETE /api/v1/lost-items/{id}` | Required | Cancel a report: sets `status` to `Cancelled` **and** soft-deletes the row (`isDeleted = true`) — the database row is never physically removed. Owner-only. |
+| `GET /api/v1/item-categories` | None | The active category lookup list, shared by Lost (Module 4) and Found (Module 5) reporting forms. |
+
+This module's kickoff instructions specified the `/api/v1/lost-items` route
+explicitly, which supersedes the `/api/v1/lost-reports` route sketched in
+the original `TODO.md` draft for this module — implemented per the explicit
+instructions given for this pass.
+
+### Ownership and visibility
+
+Ownership is enforced in `LostItemService`, not just the controller: a
+report that exists but belongs to another user returns `403`, while a
+nonexistent report returns `404` — deliberately distinct, so a client can't
+distinguish "doesn't exist" from "exists but isn't yours" by status code
+alone in the wrong direction, but a caller with a real API contract can
+still tell the two apart. There is no public/anonymous read of a lost
+report — only the owner can retrieve one by id. A future module (Search —
+Module 7, or Matching — Module 8/9) will need broader read access to power
+matching; that should go through a dedicated, deliberately-scoped read
+surface (e.g. a search endpoint returning a reduced shape) rather than
+widening `GET /api/v1/lost-items/{id}`, since `LostItemResponse` currently
+includes the reporter's raw `userId`.
+
+### Status and category
+
+`LostItemStatus` is deliberately minimal for this pass — `Active`,
+`Resolved`, `Cancelled` — rather than the full lifecycle
+(`UnderReview`/`Matched`/`Recovered`/`Expired`/`Archived`) sketched in
+`TODO.md`; Module 15 formalizes that later as an explicit state machine.
+A report's status can't be set directly by the client: it's always
+`Active` on creation and only moves to `Cancelled` via the cancel endpoint.
+
+`ItemCategory` is a database-backed lookup table (not a hard-coded enum),
+seeded with 10 initial categories (Electronics, Documents, Clothing, Bags,
+Keys, Jewelry, Books, Pets, Vehicles, Other) via EF Core `HasData`, shared
+by both this module and Module 5's found-item reporting.
+
+### Location (MVP approach)
+
+Plain `latitude`/`longitude` columns plus a free-text
+`locationDescription` — no PostGIS or other geospatial extension. Radius
+search and distance calculation are Module 7's responsibility; this module
+only stores the coordinates.
+
 ## Testing
 
-`Findora.API.Tests` (xUnit) covers Module 2's authentication logic and
-Module 3's profile/status logic — the minimum test project called for by
-Module 21's incremental testing requirement, started here rather than
-deferred.
+`Findora.API.Tests` (xUnit) covers Module 2's authentication logic,
+Module 3's profile/status logic, and Module 4's lost-item reporting — the
+minimum test project called for by Module 21's incremental testing
+requirement, started here rather than deferred.
 
 ```bash
 dotnet test
 ```
 
 - **Integration tests** (`AuthEndpointsTests`, `UsersEndpointsTests`,
-  `RateLimitingTests`) boot the real `Program` end-to-end (real middleware
+  `LostItemsEndpointsTests`, `RateLimitingTests`) boot the real `Program` end-to-end (real middleware
   pipeline, real JWT validation, real rate limiter, real
   `ActiveAccountRequirement`) via `WebApplicationFactory<Program>`, against
   an isolated **EF Core InMemory** database per test class instead of the
@@ -430,6 +484,17 @@ Admin-only status changes (Admin succeeds, normal user gets `403` — even
 against their own account), invalid status values rejected as `400`, and a
 suspended/deactivated account losing access to a protected endpoint and to
 login immediately, with an already-issued access token.
+
+Covered (Module 4): report creation (authenticated/unauthenticated,
+invalid category, missing required fields, future date lost, out-of-range
+coordinates, the server always assigning the authenticated caller's id
+regardless of a client-supplied `userId`), retrieval (owner success,
+`404` for a nonexistent report, `403` for another user's report),
+paginated own-report listing, update (allowed fields persisting, protected
+fields — id/userId/status — never changing, `403` for another user's
+report), cancellation (soft-delete + status transition, `403` for another
+user's report), a suspended account losing access immediately, and the
+category endpoint returning the seeded list without authentication.
 
 Note: these tests intentionally don't exercise real PostgreSQL-specific
 behavior (that's implicitly covered by the manual verification against the
@@ -548,6 +613,17 @@ against the real Docker PostgreSQL database: own-profile view/update,
 account status (`Active`/`Suspended`/`Deactivated`) enforced both at token
 issuance and on every authenticated request, the reputation schema
 placeholder, admin-only status management, and the limited public profile
-view are all in place, with tests added to `Findora.API.Tests`. Frontend,
-lost/found reporting (Module 4+), the reputation *algorithm* (Module 17),
-AI matching, and AWS integration have not been implemented yet.
+view are all in place, with tests added to `Findora.API.Tests`.
+
+Module 4 (Lost Item Reporting) backend is implemented and verified against
+the real Docker PostgreSQL database: create/retrieve/update/cancel for a
+user's own lost reports, server-assigned ownership and status, the shared
+`ItemCategory` lookup table (seeded with 10 categories, reusable by
+Module 5), and owner-only authorization are all in place, with tests added
+to `Findora.API.Tests`. Found item reporting (Module 5), image/file
+attachments (Module 6), search/radius filtering (Module 7), matching
+(Modules 8/9), and the formal lifecycle state machine (Module 15) are
+deliberately not implemented yet — see `TODO.md`'s Module 4 section for
+what's explicitly deferred to each. Frontend for Modules 2-4, the
+reputation *algorithm* (Module 17), AI matching, and AWS integration have
+not been implemented yet.
