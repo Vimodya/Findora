@@ -1,0 +1,33 @@
+name: findora
+
+# Local development PostgreSQL for Findora (Module 22 fast-track).
+#
+# Values are read from a root-level `.env` file if present (see
+# `.env.example`); every variable also has a safe local-only default so
+# `docker compose up` works out of the box without creating a `.env` first.
+# No real credentials are committed — only these local, non-production
+# defaults intended for developer machines.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: findora-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-findora_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-findora}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - findora_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-findora} -d ${POSTGRES_DB:-findora_dev}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  findora_postgres_data:
+    name: findora_postgres_data

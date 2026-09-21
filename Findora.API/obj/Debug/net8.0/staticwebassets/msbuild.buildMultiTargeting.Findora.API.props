@@ -1,3 +1,0 @@
-﻿<Project>
-  <Import Project="..\build\Findora.API.props" />
-</Project>

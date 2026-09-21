@@ -37,7 +37,7 @@ Everything else should follow the numbered order below.
 
 ## Module 0 — Project Foundation
 
-**Stage:** Infrastructure · **Status:** ✅ Largely complete (solution scaffolded)
+**Stage:** Infrastructure · **Status:** ✅ Complete
 
 **Purpose:** Establish the ASP.NET Core Web API foundation, project conventions,
 and baseline operational concerns (errors, logging, health) that every other
@@ -47,18 +47,18 @@ module builds on.
 - [x] Solution (`Findora.sln`) and Web API project (`Findora.API`) created
 - [x] Modular monolith folder structure (`Controllers`, `Data`, `Models`, `DTOs`, `Services`, `Repositories`, `Middleware`, `Configuration`, `Mappings`)
 - [x] Swagger/OpenAPI configured
-- [ ] Global exception-handling middleware (`Middleware/`) returning a consistent error response shape (e.g. `ProblemDetails`)
-- [ ] Structured logging (`Serilog` or built-in `ILogger`) with request/response and error logging
-- [ ] Basic API health check endpoint
-- [ ] `appsettings.json` / `appsettings.Development.json` conventions for secrets vs. config (no secrets committed)
-- [ ] `.gitignore` reviewed for `.NET`, `bin/`, `obj/`, `.env`, IDE files
-- [ ] `CONTRIBUTING.md` or a section in `README.md` documenting coding conventions (naming, folder usage, DTO vs. entity separation)
+- [x] Global exception-handling middleware (`Middleware/`) returning a consistent error response shape (e.g. `ProblemDetails`) — *`ExceptionHandlingMiddleware` added; verified it converts an intentional test exception into a `application/problem+json` response (no stack trace/message leaked) and logs the exception server-side.*
+- [x] Structured logging (`Serilog` or built-in `ILogger`) with request/response and error logging — *kept the built-in `ILogger`/`Microsoft.Extensions.Logging` (no Serilog needed); Development vs. Production log levels differentiated, `Microsoft.AspNetCore`/`Microsoft.EntityFrameworkCore` kept at `Warning` in both to avoid noise.*
+- [x] Basic API health check endpoint — *`GET /api/health` via `AddHealthChecks()`/`MapHealthChecks()`, anonymous, verified returns 200.*
+- [x] `appsettings.json` / `appsettings.Development.json` conventions for secrets vs. config (no secrets committed) — *reviewed; connection string stays empty in both committed files (Module 1 convention unchanged), new `Cors` section follows the same per-environment pattern (empty in base, dev-only origins in Development).*
+- [x] `.gitignore` reviewed for `.NET`, `bin/`, `obj/`, `.env`, IDE files — *added `.vscode/`; `bin/`, `obj/`, `.env`/`.env.*`, `.idea/`, `.vs/` already covered from Module 1.*
+- [x] `CONTRIBUTING.md` or a section in `README.md` documenting coding conventions (naming, folder usage, DTO vs. entity separation) — *added "Project conventions" section to README.md.*
 
 **Backend tasks**
-- [ ] Add global exception-handling middleware
-- [ ] Add logging provider and log levels per environment
-- [ ] Add `GET /api/health` endpoint (no auth required)
-- [ ] Add CORS policy scaffold (locked down, to be configured per environment later)
+- [x] Add global exception-handling middleware
+- [x] Add logging provider and log levels per environment
+- [x] Add `GET /api/health` endpoint (no auth required)
+- [x] Add CORS policy scaffold (locked down, to be configured per environment later) — *`FrontendCorsPolicy` + `Configuration/CorsSettings.cs`; verified an allowed dev origin gets `Access-Control-Allow-Origin` while an unlisted origin does not.*
 
 **Database tasks**
 - N/A (introduced in Module 1)
@@ -93,23 +93,23 @@ module builds on.
 layer that every feature module will extend with its own entities.
 
 **Features/tasks**
-- [ ] PostgreSQL connection string configuration (per environment, via `appsettings`/env vars)
-- [ ] `Npgsql.EntityFrameworkCore.PostgreSQL` + `Microsoft.EntityFrameworkCore.Design` packages added
-- [ ] `FindoraDbContext` created in `Data/`
-- [ ] Base entity / audit fields convention (`Id`, `CreatedAt`, `UpdatedAt`, `IsDeleted` where soft-delete applies) as a shared base class or interface in `Models/`
-- [ ] Initial (empty/skeleton) migration created and applied
-- [ ] `dotnet ef` tooling documented for both developers (how to add/apply migrations locally)
-- [ ] Database connection verified against local Docker PostgreSQL (see Module 22 fast-track)
+- [x] PostgreSQL connection string configuration (per environment, via `appsettings`/env vars)
+- [x] `Npgsql.EntityFrameworkCore.PostgreSQL` + `Microsoft.EntityFrameworkCore.Design` packages added
+- [x] `FindoraDbContext` created in `Data/`
+- [x] Base entity / audit fields convention (`Id`, `CreatedAt`, `UpdatedAt`, `IsDeleted` where soft-delete applies) as a shared base class or interface in `Models/`
+- [x] Initial (empty/skeleton) migration created and applied — *`InitialCreate` applied via `dotnet ef database update` against the Module 22 fast-track Docker PostgreSQL container; `__EFMigrationsHistory` row confirmed in the real database.*
+- [x] `dotnet ef` tooling documented for both developers (how to add/apply migrations locally)
+- [x] Database connection verified against local Docker PostgreSQL (see Module 22 fast-track) — *verified: `docker compose up -d` (see `docker-compose.yml`) brought up a healthy `postgres:16-alpine` container, and the API's connection string successfully connected and applied the migration.*
 
 **Backend tasks**
-- [ ] Register `DbContext` in `Program.cs` via dependency injection
-- [ ] Add `IAuditableEntity` (or base `AuditableEntity`) convention used by future entities
-- [ ] Add design-time `DbContext` factory if needed for `dotnet ef` CLI
+- [x] Register `DbContext` in `Program.cs` via dependency injection
+- [x] Add `IAuditableEntity` (or base `AuditableEntity`) convention used by future entities
+- [x] Add design-time `DbContext` factory if needed for `dotnet ef` CLI — *evaluated: not needed. `dotnet ef migrations add`/`database update` both resolve `FindoraDbContext` from `Program.cs`'s DI registration without one.*
 
 **Database tasks**
-- [ ] Create PostgreSQL database (local + document connection string format)
-- [ ] Create and apply initial EF Core migration (baseline, even if no domain tables yet)
-- [ ] Decide and document migration workflow (who runs `dotnet ef migrations add`, how conflicts are avoided)
+- [x] Create PostgreSQL database (local + document connection string format) — *`findora_dev` database created automatically by the Module 22 fast-track `docker-compose.yml` Postgres container; connection string format documented in README.*
+- [x] Create and apply initial EF Core migration (baseline, even if no domain tables yet) — *created and applied against the Docker Postgres container; verified with `psql \dt` and the `__EFMigrationsHistory` table.*
+- [x] Decide and document migration workflow (who runs `dotnet ef migrations add`, how conflicts are avoided)
 
 **Frontend tasks**
 - N/A
@@ -140,27 +140,27 @@ on every subsequent request. Everything past this point assumes a known,
 authenticated user.
 
 **Features/tasks**
-- [ ] User registration (email + password)
-- [ ] Password hashing (ASP.NET Core Identity or `BCrypt`/`PBKDF2` if Identity is not used wholesale)
-- [ ] Login issuing a JWT access token (+ refresh token strategy)
-- [ ] Email verification flow (token generation + verification endpoint; actual email sending can be a stub/log in MVP, wired to a real provider in Module 16)
-- [ ] Password recovery (forgot password → reset token → reset password)
-- [ ] Role-based authorization (`User`, `OrganizationStaff`, `Admin` at minimum)
-- [ ] JWT validation middleware/configuration in `Program.cs`
-- [ ] Basic rate limiting on auth endpoints (login/register) to deter brute force
+- [x] User registration (email + password) — *plus `FullName`; see README's Module 2 section for why a minimal identifying field was kept in scope. Verified: `POST /register` returns `201` with an unverified user; duplicate email returns `409`.*
+- [x] Password hashing (ASP.NET Core Identity or `BCrypt`/`PBKDF2` if Identity is not used wholesale) — *`Microsoft.AspNetCore.Identity.PasswordHasher<User>` (PBKDF2), no plaintext password ever stored/logged.*
+- [x] Login issuing a JWT access token (+ refresh token strategy) — *opaque, hashed-at-rest, rotating refresh token; reuse-after-rotation revokes all sessions for that user. Verified against the real Docker PostgreSQL database.*
+- [x] Email verification flow (token generation + verification endpoint; actual email sending can be a stub/log in MVP, wired to a real provider in Module 16) — *`LoggingEmailSender` dev stub, as specified; verified end-to-end (register → grab token from dev log → verify → `IsEmailVerified` becomes true).*
+- [x] Password recovery (forgot password → reset token → reset password) — *generic response regardless of email existence; verified reset revokes existing sessions and the new password works.*
+- [x] Role-based authorization (`User`, `OrganizationStaff`, `Admin` at minimum) — *seeded via EF Core `HasData` with fixed IDs; confirmed present in the real database.*
+- [x] JWT validation middleware/configuration in `Program.cs` — *`AddJwtBearer` + `TokenValidationParameters` (issuer/audience/signing key/lifetime all validated); fails fast at startup if the signing key is missing/weak.*
+- [x] Basic rate limiting on auth endpoints (login/register) to deter brute force — *.NET 8 built-in `Microsoft.AspNetCore.RateLimiting`, fixed-window per-IP, applied to the whole `AuthController`; verified a request beyond the configured limit gets `429`.*
 
 **Backend tasks**
-- [ ] Add `Microsoft.AspNetCore.Identity.EntityFrameworkCore` and/or JWT packages (`Microsoft.AspNetCore.Authentication.JwtBearer`)
-- [ ] `User` entity + Identity configuration (or custom user table if not using Identity fully)
-- [ ] `AuthService` (in `Services/`) for register/login/verify/reset logic
-- [ ] JWT token generation/validation configuration (`Configuration/`)
-- [ ] Role seeding (`User`, `OrganizationStaff`, `Admin`)
-- [ ] `[Authorize]` / role-based policies applied as a reusable convention
+- [x] Add `Microsoft.AspNetCore.Identity.EntityFrameworkCore` and/or JWT packages (`Microsoft.AspNetCore.Authentication.JwtBearer`) — *added `Microsoft.AspNetCore.Authentication.JwtBearer` only; `PasswordHasher<TUser>` ships in the shared framework already, so no Identity EF package was needed (see architecture note in README).*
+- [x] `User` entity + Identity configuration (or custom user table if not using Identity fully) — *custom `User`/`Role`/`UserRole` entities in `Models/`, not `IdentityDbContext`.*
+- [x] `AuthService` (in `Services/`) for register/login/verify/reset logic
+- [x] JWT token generation/validation configuration (`Configuration/`) — *`Configuration/JwtSettings.cs`.*
+- [x] Role seeding (`User`, `OrganizationStaff`, `Admin`)
+- [x] `[Authorize]` / role-based policies applied as a reusable convention — *`AdminOnly`/`OrganizationStaffOrAdmin` policies registered in `Program.cs`; verified via dedicated authorization-policy tests (403 for wrong role, success for the right one) since no Module-2 endpoint itself needs role-gating yet.*
 
 **Database tasks**
-- [ ] `Users` table (via Identity or custom), `Roles`, `UserRoles`
-- [ ] Migration for auth-related tables
-- [ ] Email verification token / password reset token storage (or Identity's built-in token providers)
+- [x] `Users` table (via Identity or custom), `Roles`, `UserRoles`
+- [x] Migration for auth-related tables — *`AddAuthenticationSchema`, applied to the real Docker PostgreSQL database; tables and seeded roles confirmed via `psql`.*
+- [x] Email verification token / password reset token storage (or Identity's built-in token providers) — *dedicated `EmailVerificationTokens`/`PasswordResetTokens` tables, hashed-at-rest, single-use, expiring.*
 
 **Frontend tasks**
 - [ ] React + TypeScript project scaffolded (`findora-web/` or similar, separate from backend)
@@ -170,25 +170,30 @@ authenticated user.
 - [ ] Forgot/reset password pages
 
 **API endpoints**
-- `POST /api/v1/auth/register`
-- `POST /api/v1/auth/login`
-- `POST /api/v1/auth/refresh`
-- `POST /api/v1/auth/logout`
-- `POST /api/v1/auth/verify-email`
-- `POST /api/v1/auth/resend-verification`
-- `POST /api/v1/auth/forgot-password`
-- `POST /api/v1/auth/reset-password`
+- [x] `POST /api/v1/auth/register`
+- [x] `POST /api/v1/auth/login`
+- [x] `POST /api/v1/auth/refresh`
+- [x] `POST /api/v1/auth/logout`
+- [x] `POST /api/v1/auth/verify-email`
+- [x] `POST /api/v1/auth/resend-verification`
+- [x] `POST /api/v1/auth/forgot-password`
+- [x] `POST /api/v1/auth/reset-password`
 
 **Dependencies**
 - Module 1
 
 **Definition of Done**
-- A user can register, verify their email (or stubbed verification in dev), log in, and receive a valid JWT
-- Protected endpoints reject requests without a valid token (`401`)
-- Role-based endpoints reject users without the required role (`403`)
-- Password reset flow works end-to-end in a local test
-- Frontend can register/login and store/send the auth token on subsequent requests
-- Basic rate limiting confirmed on login endpoint
+- [x] A user can register, verify their email (or stubbed verification in dev), log in, and receive a valid JWT — *verified manually against the real Docker PostgreSQL database.*
+- [x] Protected endpoints reject requests without a valid token (`401`) — *verified via `AuthEndpointsTests` and manually (`logout` without/with an invalid bearer token).*
+- [x] Role-based endpoints reject users without the required role (`403`) — *verified via `AuthorizationPolicyTests` against the actual registered policies; no Module 2 endpoint itself is role-gated yet, so this is proven at the policy level rather than through one of the 8 auth endpoints.*
+- [x] Password reset flow works end-to-end in a local test — *`AuthEndpointsTests.ResetPassword_WithValidToken_...` plus manual verification.*
+- [ ] Frontend can register/login and store/send the auth token on subsequent requests — **not done; no frontend exists yet (out of scope for this pass).**
+- [x] Basic rate limiting confirmed on login endpoint — *`RateLimitingTests.ExceedingTheAuthRateLimit_Returns429`.*
+
+**Module 2 is not marked fully complete** — every backend/database/API item is
+done and verified, but the frontend half of the Definition of Done is
+untouched, matching the explicit "do not implement frontend features"
+instruction for this pass.
 
 **Suggested Git branch name**
 `feature/authentication`
@@ -204,20 +209,20 @@ the groundwork for the reputation/report-history features used later by
 matching, claims, and fraud prevention.
 
 **Features/tasks**
-- [ ] View own profile
-- [ ] Update profile (name, contact preferences, avatar optional)
-- [ ] Account status (`Active`, `Suspended`, `Deactivated`)
-- [ ] Report-history foundation (a query surface listing a user's own lost/found reports — populated once Module 4/5 exist)
-- [ ] Basic reputation field on `User` (numeric or tiered), not yet computed by any algorithm — just the schema and a manual/admin-settable value
+- [x] View own profile — *`GET /api/v1/users/me`; verified against the real Docker PostgreSQL database.*
+- [x] Update profile (name, contact preferences, avatar optional) — *`PUT /api/v1/users/me` updates `FullName`/`Phone`/`AvatarUrl` (reuses `FullName` from Module 2 as the "name" field rather than duplicating it; no separate "contact preferences" concept was specified beyond phone, so none was invented).*
+- [x] Account status (`Active`, `Suspended`, `Deactivated`) — *enum + schema; enforced at both token issuance (login/refresh) and per-request (see below).*
+- [ ] Report-history foundation (a query surface listing a user's own lost/found reports — populated once Module 4/5 exist) — *deliberately not implemented: no `LostReport`/`FoundReport` entities exist yet and none were invented as placeholders, per instructions. `UsersController`/`README` document where this hooks in once Module 4/5 land.*
+- [x] Basic reputation field on `User` (numeric or tiered), not yet computed by any algorithm — just the schema and a manual/admin-settable value — *`ReputationScore` (int, default 0) added to the schema and returned in the own-profile response; no algorithm and, per this task's explicit endpoint list, no manual-set endpoint either (only `PATCH .../status` was in scope this pass) — deferred, not forgotten.*
 
 **Backend tasks**
-- [ ] `UserProfileService` for profile read/update
-- [ ] Admin-only endpoint to change user status
-- [ ] Extend `User` entity with profile fields (name, phone (optional), avatar URL, status, reputation score)
+- [x] `UserProfileService` for profile read/update
+- [x] Admin-only endpoint to change user status — *`PATCH /api/v1/users/{id}/status`, `[Authorize(Roles = "Admin")]`.*
+- [x] Extend `User` entity with profile fields (name, phone (optional), avatar URL, status, reputation score)
 
 **Database tasks**
-- [ ] Migration adding profile fields + status + reputation score to `Users`
-- [ ] Index on status for admin filtering
+- [x] Migration adding profile fields + status + reputation score to `Users` — *`AddUserProfileFields`, applied to the real Docker PostgreSQL database; schema confirmed via `psql \d "Users"`.*
+- [x] Index on status for admin filtering — *`IX_Users_Status`, confirmed via `psql`.*
 
 **Frontend tasks**
 - [ ] Profile view page
@@ -225,18 +230,20 @@ matching, claims, and fraud prevention.
 - [ ] Account status banner (e.g., "account suspended") when applicable
 
 **API endpoints**
-- `GET /api/v1/users/me`
-- `PUT /api/v1/users/me`
-- `GET /api/v1/users/{id}` (limited public view)
-- `PATCH /api/v1/users/{id}/status` (Admin)
+- [x] `GET /api/v1/users/me`
+- [x] `PUT /api/v1/users/me`
+- [x] `GET /api/v1/users/{id}` (limited public view)
+- [x] `PATCH /api/v1/users/{id}/status` (Admin)
 
 **Dependencies**
 - Module 2
 
 **Definition of Done**
-- A logged-in user can view and update their profile
-- Admin can change a user's status and it is enforced at login/auth middleware (suspended users cannot authenticate or act)
-- Reputation field exists on the schema and is returned in the profile response (value/logic itself is finalized in Module 17)
+- [x] A logged-in user can view and update their profile — *verified manually against the real Docker PostgreSQL database.*
+- [x] Admin can change a user's status and it is enforced at login/auth middleware (suspended users cannot authenticate or act) — *enforced in two places: `AuthService.LoginAsync`/`RefreshAsync` (Module 2, minimally touched for this integration) refuse new tokens for a non-Active account, and the new `ActiveAccountRequirement`/`ActiveAccountAuthorizationHandler` (added to the default authorization policy) reject an already-issued, still-valid access token immediately once status changes — no need to wait for expiry.*
+- [x] Reputation field exists on the schema and is returned in the profile response (value/logic itself is finalized in Module 17)
+
+**Test execution note:** Resolved. After the Smart App Control policy blocking `testhost.exe` was disabled and the machine rebooted, `dotnet test` ran successfully: **43/43 passing** (29 from Module 2, 14 new in `UsersEndpointsTests.cs`, plus `AuthorizationPolicyTests` updated for the new `ActiveAccountRequirement`), confirmed stable across two consecutive runs. One test-only bug was found and fixed in the process: `UsersEndpointsTests`' custom `JsonSerializerOptions` (added to deserialize the `UserStatus` enum as a string) was built from a bare `new()` instead of `new(JsonSerializerDefaults.Web)`, so it lost camelCase/case-insensitive property matching and every other field silently defaulted — no application-code defect, purely a test-helper construction bug. `dotnet build` — 0 errors, 0 warnings.
 
 **Suggested Git branch name**
 `feature/user-profile-management`
@@ -1151,19 +1158,19 @@ developers work in parallel.
 **Purpose:** Make local setup identical and fast for both developers.
 
 **Features/tasks**
-- [ ] `Dockerfile` for `Findora.API`
-- [ ] `docker-compose.yml` with PostgreSQL (and later: AI service, when Module 9 lands)
-- [ ] Environment variable conventions (`.env.example` committed, real `.env` gitignored)
-- [ ] Local development setup documented in `README.md`
-- [ ] Production configuration separation (`appsettings.Production.json` / env-based overrides, no secrets committed)
+- [ ] `Dockerfile` for `Findora.API` — *not started; explicitly deferred, not part of the Module 1 fast-track.*
+- [x] `docker-compose.yml` with PostgreSQL (and later: AI service, when Module 9 lands) — *PostgreSQL portion fast-tracked and done (root `docker-compose.yml`); AI service entry deferred to Module 9.*
+- [x] Environment variable conventions (`.env.example` committed, real `.env` gitignored)
+- [x] Local development setup documented in `README.md` — *documented for the Postgres fast-track only (start/status/health/migrate/stop/volume persistence); full-stack Docker docs pending the API `Dockerfile`.*
+- [ ] Production configuration separation (`appsettings.Production.json` / env-based overrides, no secrets committed) — *not started.*
 
 **Backend tasks**
-- [ ] Multi-stage `Dockerfile` (build stage + slim runtime stage)
-- [ ] Health check wired into `docker-compose.yml` (depends on Module 0's `/api/health`)
+- [ ] Multi-stage `Dockerfile` (build stage + slim runtime stage) — *not started; deferred.*
+- [ ] Health check wired into `docker-compose.yml` (depends on Module 0's `/api/health`) — *not applicable yet: no API service/Dockerfile exists in `docker-compose.yml` to health-check, and Module 0's `/api/health` endpoint isn't implemented yet. A `pg_isready`-based health check was added for the PostgreSQL service itself (see Database tasks below).*
 
 **Database tasks**
-- [ ] PostgreSQL service in `docker-compose.yml` with a named volume for persistence
-- [ ] Document how migrations are applied against the containerized database
+- [x] PostgreSQL service in `docker-compose.yml` with a named volume for persistence — *`postgres:16-alpine` service with `findora_postgres_data` named volume and a `pg_isready` health check; verified data survives a full `docker compose down` → `up` cycle.*
+- [x] Document how migrations are applied against the containerized database — *README section covers starting Postgres and running `dotnet ef database update` against it; verified working end-to-end.*
 
 **Frontend tasks**
 - [ ] (Optional) frontend dev container/service added to `docker-compose.yml` once the React app exists

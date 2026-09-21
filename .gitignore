@@ -1,0 +1,43 @@
+## .NET
+bin/
+obj/
+out/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+
+## Build results
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+[Ll]og/
+[Ll]ogs/
+
+## Rider / VS / VS Code
+.idea/
+.vs/
+.vscode/
+*.swp
+*.DotSettings.user
+
+## Test results
+[Tt]est[Rr]esult*/
+*.trx
+
+## Secrets / environment
+.env
+.env.*
+!.env.example
+*.pfx
+*.pem
+
+## EF Core
+*.db
+*.db-shrm
+*.db-wal
+
+## OS
+.DS_Store
+Thumbs.db
